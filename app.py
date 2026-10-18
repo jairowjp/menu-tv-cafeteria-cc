@@ -115,10 +115,10 @@ if carpeta is None:
                 unsafe_allow_html=True)
     st.stop()
 
-# Los navegadores solo permiten reproducir automáticamente si el video está en silencio.
-# Con un clic (o el botón OK del control de la TV) se activa la música.
+# La música inicia activada. Si el navegador bloquea el sonido automático, el video
+# sigue en silencio y el sonido se activa solo al primer toque o botón del control.
 if "sonido" not in st.session_state:
-    st.session_state.sonido = False
+    st.session_state.sonido = True   # la música inicia ACTIVADA por defecto
 etiqueta = "🔇 Silenciar" if st.session_state.sonido else "🔊 Activar música"
 if st.button(etiqueta, key="btn_sonido"):
     st.session_state.sonido = not st.session_state.sonido
@@ -127,31 +127,73 @@ silencio = not st.session_state.sonido
 
 
 def forzar_reproduccion(silencio):
-    """Asegura que el video arranque solo en Chrome, Safari y Smart TV:
-    lo pone en 'playsinline' (necesario en iPhone), en bucle y en silencio
-    (los navegadores solo permiten autoplay sin sonido) y, cada segundo,
-    si lo encuentra pausado, lo vuelve a reproducir."""
+    """Arranque automático en Chrome, Safari y Smart TV, con sonido por defecto.
+    1) Intenta reproducir CON sonido.
+    2) Si el navegador lo bloquea (política de autoplay), reproduce en silencio
+       para que nunca quede detenido y muestra un aviso discreto; al primer toque,
+       clic o botón del control remoto, activa el sonido automáticamente.
+    3) Cada segundo revisa y, si el video se pausó, lo vuelve a reproducir."""
     st.html(f"""
 <script>
 (function () {{
   var quiereSilencio = {'true' if silencio else 'false'};
+  window.__ccQuiereSilencio = quiereSilencio;
+
+  function aviso(mostrar) {{
+    var a = document.getElementById('cc-aviso-sonido');
+    if (!a && mostrar) {{
+      a = document.createElement('div'); a.id = 'cc-aviso-sonido';
+      a.textContent = '🔊 Toque la pantalla o pulse OK para activar el sonido';
+      a.style.cssText = 'position:fixed;left:50%;bottom:3vh;transform:translateX(-50%);z-index:99999;' +
+        'background:rgba(0,0,0,.72);color:#F7C948;border:2px solid #F7C948;border-radius:999px;' +
+        'padding:10px 22px;font:700 clamp(14px,1.6vw,34px) sans-serif;pointer-events:none;';
+      document.body.appendChild(a);
+    }}
+    if (a) a.style.display = mostrar ? 'block' : 'none';
+  }}
+
+  function reproducir(v) {{
+    var p = v.play();
+    if (p && p.catch) p.catch(function () {{
+      // Bloqueado con sonido: seguir en silencio y esperar un toque del usuario.
+      v.muted = true; v.play().catch(function () {{}});
+      if (!window.__ccQuiereSilencio) aviso(true);
+    }});
+  }}
+
   function arrancar() {{
     document.querySelectorAll('video').forEach(function (v) {{
       v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
       v.playsInline = true; v.loop = true; v.autoplay = true; v.preload = 'auto';
       if (v.dataset.ccSilencio !== String(quiereSilencio)) {{
-        v.muted = quiereSilencio; v.dataset.ccSilencio = String(quiereSilencio);
-      }}
-      if (v.paused) {{
-        var p = v.play();
-        if (p && p.catch) p.catch(function () {{ v.muted = true; v.play().catch(function () {{}}); }});
+        v.dataset.ccSilencio = String(quiereSilencio);
+        v.muted = quiereSilencio;
+        if (quiereSilencio) aviso(false);
+        reproducir(v);
+      }} else if (v.paused) {{
+        reproducir(v);
       }}
     }});
   }}
+
+  function activarSonido() {{
+    if (window.__ccQuiereSilencio) return;
+    document.querySelectorAll('video').forEach(function (v) {{
+      v.muted = false; v.volume = 1; v.play().catch(function () {{}});
+    }});
+    aviso(false);
+  }}
+  if (!window.__ccListeners) {{
+    window.__ccListeners = true;
+    ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function (ev) {{
+      document.addEventListener(ev, activarSonido, {{ capture: true, passive: true }});
+    }});
+    document.addEventListener('visibilitychange', function () {{ if (!document.hidden) arrancar(); }});
+  }}
+
   if (window.__ccTimer) clearInterval(window.__ccTimer);
   window.__ccTimer = setInterval(arrancar, 1000);
   arrancar();
-  document.addEventListener('visibilitychange', arrancar);
 }})();
 </script>""", unsafe_allow_javascript=True)
 
