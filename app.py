@@ -211,7 +211,15 @@ def poner_musica():
 
 def mostrar_menu_vectorial(archivo):
     """Menú dibujado en vivo (vectorial): se ajusta a cualquier pantalla con nitidez total."""
-    st.html(archivo.read_text(encoding="utf-8"), unsafe_allow_javascript=True)
+    contenido = archivo.read_text(encoding="utf-8")
+    # El dibujo y su script de ajuste se envían por separado: Streamlit solo ejecuta
+    # el JavaScript de forma fiable cuando el bloque contiene únicamente el script.
+    corte = contenido.rfind("<script>")
+    if corte == -1:
+        st.html(contenido)
+    else:
+        st.html(contenido[:corte])
+        st.html(contenido[corte:], unsafe_allow_javascript=True)
 
 
 if vista == "celular":
