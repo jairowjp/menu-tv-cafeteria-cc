@@ -3,9 +3,10 @@ Menú del día – Cafetería CC
 Pantalla para TV de 80" y vista para celulares.
 
 Uso:
-  TV (4K):        https://TU-APP.streamlit.app/
-  TV (Full HD):   https://TU-APP.streamlit.app/?calidad=1080
-  Celulares:      https://TU-APP.streamlit.app/?vista=celular
+  Misma dirección para todos: https://menu-cafeteria-cc.streamlit.app/
+  La app detecta sola si es celular (video vertical) o TV/computadora (video horizontal 4K).
+  Forzar vista:   ?vista=tv   o   ?vista=celular
+  TV lenta:       ?calidad=1080
 
 Cada día se agrega una carpeta en  menus/AAAA-MM-DD/  con:
   tv_4k.mp4     video horizontal 3840x2160 (con música)
@@ -34,7 +35,22 @@ st.set_page_config(page_title="Menú del día – Cafetería CC", page_icon="☕
                    layout="wide", initial_sidebar_state="collapsed")
 
 params = st.query_params
-vista = params.get("vista", "tv").lower()
+
+
+def es_celular():
+    """Detecta el tipo de equipo por el 'User-Agent' que envía el navegador.
+    Celulares: traen 'Mobile' o 'iPhone'. Las Smart TV y Android TV no traen 'Mobile'."""
+    try:
+        ua = (st.context.headers.get("User-Agent") or "")
+    except Exception:
+        ua = ""
+    return ("Mobi" in ua) or ("iPhone" in ua) or ("iPod" in ua)
+
+
+# ?vista=tv o ?vista=celular obliga una vista; si no se indica, se detecta sola.
+vista = params.get("vista", "").lower()
+if vista not in ("tv", "celular"):
+    vista = "celular" if es_celular() else "tv"
 calidad = params.get("calidad", "4k").lower()
 
 # Revisa cada 10 minutos si hay un menú nuevo (por ejemplo, al cambiar el día).
