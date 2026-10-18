@@ -6,6 +6,7 @@ Uso:
   Misma dirección para todos: https://menu-cafeteria-cc.streamlit.app/
   La app mira la PANTALLA del equipo: horizontal y grande = TV; vertical = celular.
   Forzar vista:   ?vista=tv   o   ?vista=celular   (recomendado guardar en la TV: ?vista=tv)
+  Probar otro día: ?fecha=2026-10-19   (se puede combinar: ?fecha=2026-10-19&vista=celular)
   TV lenta:       ?calidad=1080
 
 Cada día se agrega una carpeta en  menus/AAAA-MM-DD/  con:
@@ -98,9 +99,21 @@ def fecha_larga(d):
     return f"{DIAS[d.weekday()].capitalize()} {d.day} de {MESES[d.month - 1]} de {d.year}"
 
 
+def fecha_de_hoy():
+    """Hoy en Ecuador. Para PROBAR otro día se puede simular la fecha con
+    ?fecha=AAAA-MM-DD en la dirección (ej. ?fecha=2026-10-19)."""
+    simulada = params.get("fecha", "")
+    if simulada:
+        try:
+            return datetime.strptime(simulada, "%Y-%m-%d").date()
+        except ValueError:
+            pass
+    return datetime.now(ZONA).date()
+
+
 def buscar_menu():
     """Devuelve (carpeta, fecha, es_de_hoy) del menú de hoy o el último disponible."""
-    hoy = datetime.now(ZONA).date()
+    hoy = fecha_de_hoy()
     if not CARPETA_MENUS.exists():
         return None, None, False
     fechas = []
