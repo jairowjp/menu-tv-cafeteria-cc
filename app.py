@@ -125,12 +125,43 @@ if st.button(etiqueta, key="btn_sonido"):
     st.rerun()
 silencio = not st.session_state.sonido
 
+
+def forzar_reproduccion(silencio):
+    """Asegura que el video arranque solo en Chrome, Safari y Smart TV:
+    lo pone en 'playsinline' (necesario en iPhone), en bucle y en silencio
+    (los navegadores solo permiten autoplay sin sonido) y, cada segundo,
+    si lo encuentra pausado, lo vuelve a reproducir."""
+    st.html(f"""
+<script>
+(function () {{
+  var quiereSilencio = {'true' if silencio else 'false'};
+  function arrancar() {{
+    document.querySelectorAll('video').forEach(function (v) {{
+      v.setAttribute('playsinline', ''); v.setAttribute('webkit-playsinline', '');
+      v.playsInline = true; v.loop = true; v.autoplay = true; v.preload = 'auto';
+      if (v.dataset.ccSilencio !== String(quiereSilencio)) {{
+        v.muted = quiereSilencio; v.dataset.ccSilencio = String(quiereSilencio);
+      }}
+      if (v.paused) {{
+        var p = v.play();
+        if (p && p.catch) p.catch(function () {{ v.muted = true; v.play().catch(function () {{}}); }});
+      }}
+    }});
+  }}
+  if (window.__ccTimer) clearInterval(window.__ccTimer);
+  window.__ccTimer = setInterval(arrancar, 1000);
+  arrancar();
+  document.addEventListener('visibilitychange', arrancar);
+}})();
+</script>""", unsafe_allow_javascript=True)
+
 if vista == "celular":
     st.markdown(f"<h3 style='color:#F7C948;text-align:center;font-family:sans-serif;margin:60px 12px 12px'>"
                 f"Menú del {fecha_larga(fecha).lower()}</h3>", unsafe_allow_html=True)
     video = carpeta / "celular.mp4"
     if video.exists():
         st.video(str(video), loop=True, autoplay=True, muted=silencio)
+        forzar_reproduccion(silencio)
     elif (carpeta / "celular.png").exists():
         st.image(str(carpeta / "celular.png"), width="stretch")
     st.markdown(f"""<div class="botones">
@@ -148,6 +179,7 @@ else:
         video = carpeta / ("tv_4k.mp4" if nombre == "tv_1080.mp4" else "tv_1080.mp4")
     if video.exists():
         st.video(str(video), loop=True, autoplay=True, muted=silencio)
+        forzar_reproduccion(silencio)
     else:
         st.markdown('<div class="aviso">Falta el video de TV en la carpeta del día.</div>',
                     unsafe_allow_html=True)
