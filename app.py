@@ -10,10 +10,10 @@ Uso:
   TV lenta:       ?calidad=1080
 
 Cada día se agrega una carpeta en  menus/AAAA-MM-DD/  con:
-  tv_4k.mp4     video horizontal 3840x2160
-  tv_1080.mp4   video horizontal 1920x1080 (para TV con navegador lento)
-  celular.mp4   video vertical 1080x1920
-  celular.png   imagen vertical en alta resolución
+  tv.html       menú VECTORIAL animado para TV (se dibuja en vivo, nitidez total)
+  celular.html  menú VECTORIAL animado para celulares
+  celular.png   imagen vertical en alta resolución (para descargar)
+  (Si una carpeta antigua solo tiene tv_4k.mp4 / tv_1080.mp4 / celular.mp4, se usan esos.)
   musica.mp3    (opcional) música solo para ese día
 Música general para todos los días:  menus/musica.mp3
 La app muestra sola el menú de HOY (hora de Ecuador). Si aún no se subió,
@@ -140,71 +140,49 @@ if carpeta is None:
 # Música: la del día (menus/AAAA-MM-DD/musica.mp3) o la general (menus/musica.mp3).
 musica = next((m for m in (carpeta / "musica.mp3", CARPETA_MENUS / "musica.mp3") if m.exists()), None)
 
-# La música inicia ACTIVADA por defecto. Si el navegador bloquea el sonido automático,
-# el video sigue en silencio y el sonido se activa solo al primer toque o botón del control.
-if "sonido" not in st.session_state:
-    st.session_state.sonido = True
-etiqueta = "🔇 Silenciar" if st.session_state.sonido else "🔊 Activar música"
-if st.button(etiqueta, key="btn_sonido"):
-    st.session_state.sonido = not st.session_state.sonido
-    st.rerun()
-silencio = not st.session_state.sonido
 
-
-def reproductor_infinito(silencio, musica_aparte):
-    """Mantiene video y música SIEMPRE sonando, en bucle, sin parar nunca:
-    - video: en silencio (así los navegadores lo dejan arrancar solo), en bucle, 'playsinline';
-    - música: archivo aparte en bucle; si el navegador bloquea el sonido, se muestra un aviso
-      y el primer toque / botón OK del control lo activa;
-    - cada segundo revisa: si algo se pausó o terminó, lo vuelve a reproducir."""
+def sonido_siempre_activo(hay_musica):
+    """La música está SIEMPRE activada (sin botón). Se intenta reproducir con sonido
+    desde el inicio; en equipos con reproducción automática permitida (navegador
+    kiosko en la TV) suena sola. Si el navegador lo bloquea, suena al primer toque,
+    clic o botón del control remoto en cualquier parte de la pantalla.
+    Además, cada segundo revisa que música y animación sigan sonando sin parar."""
     st.html(f"""
 <script>
 (function () {{
-  var quiereSilencio = {'true' if silencio else 'false'};
-  var musicaAparte = {'true' if musica_aparte else 'false'};
-  window.__ccQuiereSilencio = quiereSilencio;
-
+  var musicaAparte = {'true' if hay_musica else 'false'};
   function aviso(mostrar) {{
     var a = document.getElementById('cc-aviso-sonido');
     if (!a && mostrar) {{
       a = document.createElement('div'); a.id = 'cc-aviso-sonido';
-      a.textContent = '🔊 Toque la pantalla o pulse OK para activar el sonido';
-      a.style.cssText = 'position:fixed;left:50%;bottom:3vh;transform:translateX(-50%);z-index:99999;' +
-        'background:rgba(0,0,0,.72);color:#F7C948;border:2px solid #F7C948;border-radius:999px;' +
-        'padding:10px 22px;font:700 clamp(14px,1.6vw,34px) sans-serif;pointer-events:none;';
+      a.textContent = '🔊 Toque la pantalla para escuchar la música';
+      var abajo = innerWidth > innerHeight;
+      a.style.cssText = 'position:fixed;left:50%;' + (abajo ? 'bottom:2vh;' : 'top:1.5vh;') + 'transform:translateX(-50%);z-index:99999;' +
+        'background:rgba(0,0,0,.65);color:#F7C948;border:2px solid #F7C948;border-radius:999px;' +
+        'padding:8px 20px;font:700 clamp(13px,1.4vw,30px) sans-serif;pointer-events:none;';
       document.body.appendChild(a);
     }}
     if (a) a.style.display = mostrar ? 'block' : 'none';
   }}
-  function conSonido(el) {{ return musicaAparte ? el.tagName === 'AUDIO' : el.tagName === 'VIDEO'; }}
+  function lleva(el) {{ return musicaAparte ? el.tagName === 'AUDIO' : el.tagName === 'VIDEO'; }}
   function reproducir(el) {{
     var p = el.play();
     if (p && p.catch) p.catch(function () {{
       if (el.tagName === 'VIDEO') {{ el.muted = true; el.play().catch(function () {{}}); }}
-      if (!window.__ccQuiereSilencio && conSonido(el)) aviso(true);
+      if (lleva(el)) aviso(true);
     }});
   }}
   function revisar() {{
     document.querySelectorAll('video, audio').forEach(function (el) {{
       el.loop = true; el.autoplay = true; el.preload = 'auto';
-      if (el.tagName === 'VIDEO') {{
-        el.setAttribute('playsinline', ''); el.setAttribute('webkit-playsinline', ''); el.playsInline = true;
-      }}
-      var debeSilencio = conSonido(el) ? window.__ccQuiereSilencio : true;
-      if (el.dataset.ccSilencio !== String(debeSilencio)) {{
-        el.dataset.ccSilencio = String(debeSilencio);
-        el.muted = debeSilencio;
-        if (debeSilencio && conSonido(el)) aviso(false);
-        reproducir(el);
-      }} else if (el.paused || el.ended) {{
-        reproducir(el);
-      }}
+      if (el.tagName === 'VIDEO') {{ el.setAttribute('playsinline', ''); el.playsInline = true; }}
+      if (!el.dataset.ccListo) {{ el.dataset.ccListo = '1'; el.muted = !lleva(el); el.volume = 1; reproducir(el); }}
+      else if (el.paused || el.ended) {{ reproducir(el); }}
     }});
   }}
-  function activarSonido() {{
-    if (window.__ccQuiereSilencio) return;
+  function activar() {{
     document.querySelectorAll('video, audio').forEach(function (el) {{
-      if (conSonido(el)) {{ el.muted = false; el.volume = 1; }}
+      if (lleva(el)) {{ el.muted = false; el.volume = 1; }}
       el.play().catch(function () {{}});
     }});
     aviso(false);
@@ -212,14 +190,13 @@ def reproductor_infinito(silencio, musica_aparte):
   if (!window.__ccListeners) {{
     window.__ccListeners = true;
     ['pointerdown', 'touchstart', 'keydown', 'click'].forEach(function (ev) {{
-      document.addEventListener(ev, activarSonido, {{ capture: true, passive: true }});
+      document.addEventListener(ev, activar, {{ capture: true, passive: true }});
     }});
     document.addEventListener('visibilitychange', function () {{ if (!document.hidden) revisar(); }});
+    document.addEventListener('ended', function (e) {{
+      var el = e.target; if (el && el.play) {{ el.currentTime = 0; el.play().catch(function () {{}}); }}
+    }}, true);
   }}
-  // Al terminar un ciclo, volver a empezar de inmediato (respaldo del 'loop').
-  document.addEventListener('ended', function (e) {{
-    var el = e.target; if (el && el.play) {{ el.currentTime = 0; el.play().catch(function () {{}}); }}
-  }}, true);
   if (window.__ccTimer) clearInterval(window.__ccTimer);
   window.__ccTimer = setInterval(revisar, 1000);
   revisar();
@@ -232,18 +209,21 @@ def poner_musica():
         st.audio(str(musica), format="audio/mpeg", loop=True, autoplay=True)
 
 
+def mostrar_menu_vectorial(archivo):
+    """Menú dibujado en vivo (vectorial): se ajusta a cualquier pantalla con nitidez total."""
+    st.html(archivo.read_text(encoding="utf-8"), unsafe_allow_javascript=True)
+
+
 if vista == "celular":
-    st.markdown(f"<h3 style='color:#F7C948;text-align:center;font-family:sans-serif;margin:60px 12px 12px'>"
-                f"Menú del {fecha_larga(fecha).lower()}</h3>", unsafe_allow_html=True)
-    video = carpeta / "celular.mp4"
-    if video.exists():
-        st.video(str(video), loop=True, autoplay=True, muted=True)
-        poner_musica()
-        reproductor_infinito(silencio, musica is not None)
+    html_menu = carpeta / "celular.html"
+    if html_menu.exists():
+        mostrar_menu_vectorial(html_menu)
+    elif (carpeta / "celular.mp4").exists():
+        st.video(str(carpeta / "celular.mp4"), loop=True, autoplay=True, muted=True)
     elif (carpeta / "celular.png").exists():
         st.image(str(carpeta / "celular.png"), width="stretch")
-        poner_musica()
-        reproductor_infinito(silencio, musica is not None)
+    poner_musica()
+    sonido_siempre_activo(musica is not None)
     st.markdown(f"""<div class="botones">
         <a class="wa" href="{WHATSAPP}" target="_blank">📲 Pedir por WhatsApp</a>
         <a class="pl" href="{PLATAFORMA}" target="_blank">🛒 Pedir en la plataforma</a></div>""",
@@ -253,14 +233,18 @@ if vista == "celular":
             st.download_button("⬇️ Descargar imagen del menú", f, file_name=f"menu_{fecha}.png",
                                mime="image/png", width="stretch")
 else:
-    nombre = "tv_1080.mp4" if calidad == "1080" else "tv_4k.mp4"
-    video = carpeta / nombre
-    if not video.exists():
-        video = carpeta / ("tv_4k.mp4" if nombre == "tv_1080.mp4" else "tv_1080.mp4")
-    if video.exists():
-        st.video(str(video), loop=True, autoplay=True, muted=True)
-        poner_musica()
-        reproductor_infinito(silencio, musica is not None)
+    html_menu = carpeta / "tv.html"
+    if html_menu.exists():
+        mostrar_menu_vectorial(html_menu)
     else:
-        st.markdown('<div class="aviso">Falta el video de TV en la carpeta del día.</div>',
-                    unsafe_allow_html=True)
+        nombre = "tv_1080.mp4" if calidad == "1080" else "tv_4k.mp4"
+        video = carpeta / nombre
+        if not video.exists():
+            video = carpeta / ("tv_4k.mp4" if nombre == "tv_1080.mp4" else "tv_1080.mp4")
+        if video.exists():
+            st.video(str(video), loop=True, autoplay=True, muted=True)
+        else:
+            st.markdown('<div class="aviso">Falta el menú de TV en la carpeta del día.</div>',
+                        unsafe_allow_html=True)
+    poner_musica()
+    sonido_siempre_activo(musica is not None)
