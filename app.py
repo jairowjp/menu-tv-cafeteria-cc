@@ -14,8 +14,9 @@ Cada día se agrega una carpeta en  menus/AAAA-MM-DD/  con:
   celular.html  menú VECTORIAL animado para celulares
   celular.png   imagen vertical en alta resolución (para descargar)
   (Si una carpeta antigua solo tiene tv_4k.mp4 / tv_1080.mp4 / celular.mp4, se usan esos.)
-  musica.mp3    (opcional) música solo para ese día
-Música general para todos los días:  menus/musica.mp3
+  *.mp3         (opcional) canciones solo para ese día
+Música: TODOS los .mp3 de menus/ suenan en orden alfabético y se repiten sin fin.
+  (Si la carpeta del día tiene sus propios .mp3, se usan esos ese día.)
 La app muestra sola el menú de HOY (hora de Ecuador). Si aún no se subió,
 muestra el último menú disponible. Video y música se repiten sin parar.
 """
@@ -137,20 +138,22 @@ if carpeta is None:
                 unsafe_allow_html=True)
     st.stop()
 
-# Música: la del día (menus/AAAA-MM-DD/musica.mp3) o la general (menus/musica.mp3).
-musica = next((m for m in (carpeta / "musica.mp3", CARPETA_MENUS / "musica.mp3") if m.exists()), None)
+# Música: lista de reproducción con TODOS los .mp3 de la carpeta del día
+# (menus/AAAA-MM-DD/*.mp3) o, si no hay, todos los de menus/*.mp3.
+# Suenan uno tras otro en orden alfabético y, al terminar el último, vuelve a empezar.
+mp3_del_dia = sorted(carpeta.glob("*.mp3"), key=lambda f: f.name.lower())
+canciones = mp3_del_dia or sorted(CARPETA_MENUS.glob("*.mp3"), key=lambda f: f.name.lower())
 
 
 def sonido_siempre_activo(hay_musica):
-    """La música está SIEMPRE activada (sin botón). Se intenta reproducir con sonido
-    desde el inicio; en equipos con reproducción automática permitida (navegador
-    kiosko en la TV) suena sola. Si el navegador lo bloquea, suena al primer toque,
-    clic o botón del control remoto en cualquier parte de la pantalla.
-    Además, cada segundo revisa que música y animación sigan sonando sin parar."""
+    """La música está SIEMPRE activada (sin botón). Reproduce la lista de canciones en
+    orden y la repite sin fin. Si el navegador bloquea el sonido automático, empieza al
+    primer toque, clic o botón del control remoto. Cada segundo revisa que todo siga sonando."""
     st.html(f"""
 <script>
 (function () {{
   var musicaAparte = {'true' if hay_musica else 'false'};
+  if (typeof window.__ccIdx !== 'number') window.__ccIdx = 0;
   function aviso(mostrar) {{
     var a = document.getElementById('cc-aviso-sonido');
     if (!a && mostrar) {{
@@ -164,27 +167,36 @@ def sonido_siempre_activo(hay_musica):
     }}
     if (a) a.style.display = mostrar ? 'block' : 'none';
   }}
-  function lleva(el) {{ return musicaAparte ? el.tagName === 'AUDIO' : el.tagName === 'VIDEO'; }}
-  function reproducir(el) {{
+  function canciones() {{ return Array.prototype.slice.call(document.querySelectorAll('audio')); }}
+  function actual() {{ var l = canciones(); if (!l.length) return null; window.__ccIdx = window.__ccIdx % l.length; return l[window.__ccIdx]; }}
+  function tocar(el, conSonido) {{
     var p = el.play();
     if (p && p.catch) p.catch(function () {{
       if (el.tagName === 'VIDEO') {{ el.muted = true; el.play().catch(function () {{}}); }}
-      if (lleva(el)) aviso(true);
+      if (conSonido) aviso(true);
     }});
   }}
   function revisar() {{
-    document.querySelectorAll('video, audio').forEach(function (el) {{
-      el.loop = true; el.autoplay = true; el.preload = 'auto';
-      if (el.tagName === 'VIDEO') {{ el.setAttribute('playsinline', ''); el.playsInline = true; }}
-      if (!el.dataset.ccListo) {{ el.dataset.ccListo = '1'; el.muted = !lleva(el); el.volume = 1; reproducir(el); }}
-      else if (el.paused || el.ended) {{ reproducir(el); }}
+    document.querySelectorAll('video').forEach(function (v) {{
+      v.loop = true; v.autoplay = true; v.setAttribute('playsinline', ''); v.playsInline = true;
+      if (!v.dataset.ccListo) {{ v.dataset.ccListo = '1'; v.muted = musicaAparte; }}
+      if (v.paused || v.ended) tocar(v, !musicaAparte);
     }});
+    if (!musicaAparte) return;
+    var l = canciones(), cur = actual();
+    l.forEach(function (a) {{ a.loop = false; a.muted = false; a.volume = 1; a.preload = 'auto';
+      if (a !== cur && !a.paused) a.pause(); }});
+    if (cur && (cur.paused || cur.ended)) {{ if (cur.ended) cur.currentTime = 0; tocar(cur, true); }}
+  }}
+  function siguiente() {{
+    var l = canciones(); if (!l.length) return;
+    var antes = actual(); if (antes) {{ antes.pause(); }}
+    window.__ccIdx = (window.__ccIdx + 1) % l.length;
+    var cur = actual(); cur.currentTime = 0; tocar(cur, true);
   }}
   function activar() {{
-    document.querySelectorAll('video, audio').forEach(function (el) {{
-      if (lleva(el)) {{ el.muted = false; el.volume = 1; }}
-      el.play().catch(function () {{}});
-    }});
+    var cur = actual(); if (cur) {{ cur.muted = false; tocar(cur, false); }}
+    document.querySelectorAll('video').forEach(function (v) {{ if (!musicaAparte) v.muted = false; v.play().catch(function () {{}}); }});
     aviso(false);
   }}
   if (!window.__ccListeners) {{
@@ -194,7 +206,9 @@ def sonido_siempre_activo(hay_musica):
     }});
     document.addEventListener('visibilitychange', function () {{ if (!document.hidden) revisar(); }});
     document.addEventListener('ended', function (e) {{
-      var el = e.target; if (el && el.play) {{ el.currentTime = 0; el.play().catch(function () {{}}); }}
+      var el = e.target;
+      if (el && el.tagName === 'AUDIO') siguiente();
+      else if (el && el.play) {{ el.currentTime = 0; el.play().catch(function () {{}}); }}
     }}, true);
   }}
   if (window.__ccTimer) clearInterval(window.__ccTimer);
@@ -205,8 +219,8 @@ def sonido_siempre_activo(hay_musica):
 
 
 def poner_musica():
-    if musica:
-        st.audio(str(musica), format="audio/mpeg", loop=True, autoplay=True)
+    for cancion in canciones:
+        st.audio(str(cancion), format="audio/mpeg")
 
 
 def mostrar_menu_vectorial(archivo):
@@ -231,7 +245,7 @@ if vista == "celular":
     elif (carpeta / "celular.png").exists():
         st.image(str(carpeta / "celular.png"), width="stretch")
     poner_musica()
-    sonido_siempre_activo(musica is not None)
+    sonido_siempre_activo(bool(canciones))
     st.markdown(f"""<div class="botones">
         <a class="wa" href="{WHATSAPP}" target="_blank">📲 Pedir por WhatsApp</a>
         <a class="pl" href="{PLATAFORMA}" target="_blank">🛒 Pedir en la plataforma</a></div>""",
@@ -255,4 +269,4 @@ else:
             st.markdown('<div class="aviso">Falta el menú de TV en la carpeta del día.</div>',
                         unsafe_allow_html=True)
     poner_musica()
-    sonido_siempre_activo(musica is not None)
+    sonido_siempre_activo(bool(canciones))
