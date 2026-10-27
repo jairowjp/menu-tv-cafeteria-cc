@@ -1,9 +1,9 @@
 # Menú del día – Cafetería CC (pantalla para TV y celulares)
 
 App de Streamlit que muestra automáticamente el menú del día:
-- **TV 80" (4K):** `https://TU-APP.streamlit.app/`
-- **TV con navegador lento (Full HD):** `https://TU-APP.streamlit.app/?calidad=1080`
-- **Celulares:** `https://TU-APP.streamlit.app/?vista=celular` (video + botones de WhatsApp y plataforma)
+- **TV 80" (4K):** `https://menu-cafeteria-cc.streamlit.app`
+- **TV con navegador lento (Full HD):** `https://menu-cafeteria-cc.streamlit.app/?calidad=1080`
+- **Celulares:** `https://menu-cafeteria-cc.streamlit.app/?vista=celular` (video + botones de WhatsApp y plataforma)
 
 La app elige sola el menú de **hoy** (hora de Ecuador). Si el de hoy aún no se subió, muestra el último disponible.
 Cada 10 minutos revisa si hay uno nuevo, así que la TV cambia sola de día.
