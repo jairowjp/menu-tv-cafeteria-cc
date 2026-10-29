@@ -140,7 +140,7 @@ if carpeta is None:
 
 # Música: lista de reproducción con TODOS los .mp3 de la carpeta del día
 # (menus/AAAA-MM-DD/*.mp3) o, si no hay, todos los de menus/*.mp3.
-# Suenan uno tras otro en orden alfabético y, al terminar el último, vuelve a empezar.
+# Suenan en orden ALEATORIO; al terminar todas se vuelven a barajar y siguen sin parar.
 mp3_del_dia = sorted(carpeta.glob("*.mp3"), key=lambda f: f.name.lower())
 canciones = mp3_del_dia or sorted(CARPETA_MENUS.glob("*.mp3"), key=lambda f: f.name.lower())
 
@@ -153,7 +153,14 @@ def sonido_siempre_activo(hay_musica):
 <script>
 (function () {{
   var musicaAparte = {'true' if hay_musica else 'false'};
-  if (typeof window.__ccIdx !== 'number') window.__ccIdx = 0;
+  /* Orden ALEATORIO: se barajan todas las canciones; al terminar la ultima se vuelven
+     a barajar (sin repetir seguida la misma) y la musica nunca para. */
+  function barajar(n, evitar) {{
+    var a = []; while (a.length !== n) a.push(a.length);
+    for (var i = n - 1; i > 0; i--) {{ var j = Math.floor(Math.random() * (i + 1)); var t = a[i]; a[i] = a[j]; a[j] = t; }}
+    if (n > 1 && a[0] === evitar) {{ var t2 = a[0]; a[0] = a[n - 1]; a[n - 1] = t2; }}
+    return a;
+  }}
   function aviso(mostrar) {{
     var a = document.getElementById('cc-aviso-sonido');
     if (!a && mostrar) {{
@@ -168,7 +175,9 @@ def sonido_siempre_activo(hay_musica):
     if (a) a.style.display = mostrar ? 'block' : 'none';
   }}
   function canciones() {{ return Array.prototype.slice.call(document.querySelectorAll('audio')); }}
-  function actual() {{ var l = canciones(); if (!l.length) return null; window.__ccIdx = window.__ccIdx % l.length; return l[window.__ccIdx]; }}
+  function actual() {{ var l = canciones(); if (!l.length) return null;
+    if (!window.__ccOrden || window.__ccOrden.length !== l.length) {{ window.__ccOrden = barajar(l.length, -1); window.__ccPos = 0; }}
+    return l[window.__ccOrden[window.__ccPos]]; }}
   function tocar(el, conSonido) {{
     var p = el.play();
     if (p && p.catch) p.catch(function () {{
@@ -191,7 +200,8 @@ def sonido_siempre_activo(hay_musica):
   function siguiente() {{
     var l = canciones(); if (!l.length) return;
     var antes = actual(); if (antes) {{ antes.pause(); }}
-    window.__ccIdx = (window.__ccIdx + 1) % l.length;
+    window.__ccPos = (window.__ccPos || 0) + 1;
+    if (window.__ccPos >= l.length) {{ var ultima = window.__ccOrden[l.length - 1]; window.__ccOrden = barajar(l.length, ultima); window.__ccPos = 0; }}
     var cur = actual(); cur.currentTime = 0; tocar(cur, true);
   }}
   function activar() {{
