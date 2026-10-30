@@ -260,30 +260,50 @@ def pagina_control():
                 f'<div class="cc-resumen"><div class="cc-pill v">🟢 {4 - len(agot)} disponibles</div>'
                 f'<div class="cc-pill r">🔴 {len(agot)} agotados</div></div>', unsafe_allow_html=True)
     estilos = []
+
+    def al_cambiar(codigo):
+        valor = st.session_state.get(f"seg_{codigo}")
+        if valor:
+            marcar_plato(fecha, codigo, valor == "AGOTADO")
+            etiqueta = dict(PLATOS)[codigo]
+            st.toast(("🔴 " if valor == "AGOTADO" else "🟢 ") + f"{etiqueta}: {valor.lower()}")
+
     for (codigo, etiqueta), nombre in zip(PLATOS, nombres):
         esta_agotado = codigo in agot
         foto = imgs.get(nombre, "")
-        st.markdown(
-            f'<div class="cc-card {"agot" if esta_agotado else ""}">'
-            f'{"<img src=" + chr(34) + foto + chr(34) + ">" if foto else ""}'
-            f'<div><div class="cc-tag">{etiqueta}</div><div class="cc-nom">{nombre}</div>'
-            + ('<span class="cc-est r"><span class="cc-pto"></span>AGOTADO</span>' if esta_agotado
-               else '<span class="cc-est v"><span class="cc-pto"></span>DISPONIBLE</span>')
-            + '</div></div>', unsafe_allow_html=True)
-        activo_v = "background: linear-gradient(135deg,#2FB457,#17803A) !important; color:#FFFFFF !important; border:0 !important; box-shadow: 0 0 0 3px rgba(47,180,87,.35), 0 10px 24px rgba(47,180,87,.45) !important;"
-        activo_r = "background: linear-gradient(135deg,#FF3B4E,#B3001B) !important; color:#FFFFFF !important; border:0 !important; box-shadow: 0 0 0 3px rgba(255,59,78,.35), 0 10px 24px rgba(255,59,78,.45) !important;"
-        apagado = "background: rgba(255,255,255,.06) !important; color: rgba(255,255,255,.75) !important; border: 1px solid rgba(255,255,255,.18) !important;"
-        estilos.append(f".st-key-d_{codigo} button {{ {apagado if esta_agotado else activo_v} }}")
-        estilos.append(f".st-key-a_{codigo} button {{ {activo_r if esta_agotado else apagado} }}")
-        c1, c2 = st.columns(2)
-        if c1.button(("✓ DISPONIBLE" if not esta_agotado else "DISPONIBLE"), key=f"d_{codigo}", width="stretch"):
-            marcar_plato(fecha, codigo, False)
-            st.toast(f"🟢 {etiqueta}: disponible")
-            st.rerun()
-        if c2.button(("✓ AGOTADO" if esta_agotado else "AGOTADO"), key=f"a_{codigo}", width="stretch"):
-            marcar_plato(fecha, codigo, True)
-            st.toast(f"🔴 {etiqueta}: agotado")
-            st.rerun()
+        actual = "AGOTADO" if esta_agotado else "DISPONIBLE"
+        st.session_state[f"seg_{codigo}"] = actual          # siempre muestra el estado real compartido
+        with st.container(key=f"card_{codigo}"):
+            st.markdown(
+                f'<div class="cc-card {"agot" if esta_agotado else ""}">'
+                f'{"<img src=" + chr(34) + foto + chr(34) + ">" if foto else ""}'
+                f'<div><div class="cc-tag">{etiqueta}</div><div class="cc-nom">{nombre}</div>'
+                + ('<span class="cc-est r"><span class="cc-pto"></span>AGOTADO</span>' if esta_agotado
+                   else '<span class="cc-est v"><span class="cc-pto"></span>DISPONIBLE</span>')
+                + '</div></div>', unsafe_allow_html=True)
+            st.segmented_control(f"Estado de {etiqueta}", ["DISPONIBLE", "AGOTADO"], required=True,
+                                 format_func=lambda v: ("● " + v), key=f"seg_{codigo}",
+                                 on_change=al_cambiar, args=(codigo,), label_visibility="collapsed",
+                                 width="stretch")
+        color = "#FF3B4E" if esta_agotado else "#2FB457"
+        oscuro = "#B3001B" if esta_agotado else "#17803A"
+        estilos.append(
+            f".st-key-card_{codigo} {{ border-radius: 22px; padding: 14px 14px 16px; margin-top: 6px;"
+            f" background: {'linear-gradient(135deg, rgba(208,2,27,.26), rgba(255,255,255,.03))' if esta_agotado else 'rgba(255,255,255,.05)'};"
+            f" border: 1px solid {'rgba(255,59,78,.7)' if esta_agotado else 'rgba(255,255,255,.13)'}; box-shadow: 0 10px 26px rgba(0,0,0,.35); }}"
+            f".st-key-seg_{codigo} [role='radiogroup'] {{ background: rgba(0,0,0,.35); border-radius: 999px; padding: 4px; gap: 4px;"
+            f" border: 1px solid rgba(255,255,255,.12); width: 100%; }}"
+            f".st-key-seg_{codigo} button {{ flex: 1 1 0; min-height: 40px; border-radius: 999px !important; border: 0 !important;"
+            f" background: transparent !important; color: rgba(255,255,255,.55) !important; font-family: 'Barlow Condensed', sans-serif;"
+            f" font-weight: 800; letter-spacing: 2px; font-size: 15px; transition: all .25s ease; }}"
+            f".st-key-seg_{codigo} button[aria-checked='true'] p {{ color: #FFFFFF !important; }}"
+            f".st-key-seg_{codigo} button p {{ font-size: 15px !important; font-weight: 800 !important; letter-spacing: 2px; }}"
+            f".st-key-seg_{codigo} button[aria-checked='true'] {{"
+            f" background: linear-gradient(135deg, {color}, {oscuro}) !important; color: #FFFFFF !important;"
+            f" box-shadow: 0 0 0 2px rgba(255,255,255,.18) inset, 0 6px 18px {color}88; animation: ccBrillo 2.4s ease-in-out infinite; }}"
+        )
+    estilos.append("@keyframes ccBrillo { 50% { filter: brightness(1.15); } }")
+    estilos.append(".cc-card { margin: 0 0 10px !important; padding: 0 !important; background: transparent !important; border: 0 !important; box-shadow: none !important; }")
     st.markdown("<style>" + "\n".join(estilos) + "</style>", unsafe_allow_html=True)
     st.markdown('<div class="cc-nota">Los cambios aparecen en todas las TV y celulares en 2–3 segundos.</div>',
                 unsafe_allow_html=True)
