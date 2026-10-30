@@ -1,0 +1,43 @@
+name: Mantener activa la pagina del menu
+
+# Cada 2 horas un navegador visita la pagina para que Streamlit nunca la duerma.
+# Si la encuentra dormida, pulsa el boton para despertarla.
+on:
+  schedule:
+    - cron: "0 */2 * * *"
+  workflow_dispatch:
+
+jobs:
+  despertar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Instalar navegador
+        run: |
+          pip install playwright
+          python -m playwright install --with-deps chromium
+      - name: Visitar la pagina del menu
+        run: |
+          python - <<'PY'
+          import asyncio, re
+          from playwright.async_api import async_playwright
+          URL = "https://menu-cafeteria-cc.streamlit.app/?vista=tv"
+          async def main():
+              async with async_playwright() as p:
+                  navegador = await p.chromium.launch()
+                  pagina = await navegador.new_page()
+                  await pagina.goto(URL, wait_until="domcontentloaded", timeout=120000)
+                  await pagina.wait_for_timeout(10000)
+                  boton = pagina.get_by_role("button", name=re.compile("get this app back up", re.I))
+                  if await boton.count():
+                      print("La pagina estaba dormida: despertandola...")
+                      await boton.first.click()
+                      await pagina.wait_for_timeout(90000)
+                  else:
+                      print("La pagina esta activa.")
+                  await navegador.close()
+          asyncio.run(main())
+          PY
