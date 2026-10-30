@@ -172,18 +172,68 @@ def nombres_platos(carpeta):
     return [etiqueta for _, etiqueta in PLATOS]
 
 
+def imagenes_menu(carpeta):
+    """Logo y fotos de los platos tomados del menú del día (para mostrarlos en el panel)."""
+    archivo = carpeta / "tv.html"
+    if not archivo.exists():
+        archivo = carpeta / "celular.html"
+    if not archivo.exists():
+        return {}
+    return {alt: src for src, alt in re.findall(r'<img src="(data:image/[^"]+)" alt="([^"]*)"', archivo.read_text(encoding="utf-8"))}
+
+
 def pagina_control():
+    imgs = imagenes_menu(carpeta) if carpeta else {}
+    logo = imgs.get("Logo Coffee and CC", "")
     st.markdown("""<style>
-      .block-container { padding: 24px 16px 60px !important; max-width: 720px !important; margin: 0 auto; }
-      [data-testid="stVerticalBlock"] { gap: 12px !important; }
-      h1, h2, h3, p, label, .stMarkdown { color: #FFFFFF !important; font-family: sans-serif; }
-      div.stButton > button { width: 100%; min-height: 64px; font-size: 20px; font-weight: 800; border-radius: 14px; }
-      .cc-estado { border-radius: 16px; padding: 14px 16px; margin-top: 8px; font-family: sans-serif; }
-      .cc-disp { background: #0F3D22; border: 2px solid #2FB457; }
-      .cc-agot { background: #4A0A12; border: 2px solid #FF3B4E; }
-      .cc-tag { font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #F7C948; text-transform: uppercase; }
-      .cc-nom { font-size: 20px; font-weight: 800; color: #FFFFFF; margin: 4px 0; }
-      .cc-est { font-size: 16px; font-weight: 800; }
+      @import url('https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@600;700;800&display=swap');
+      html, body, .stApp, [data-testid="stAppViewContainer"] {
+        background: radial-gradient(1200px 600px at 10% -10%, #3B1466 0%, transparent 60%),
+                    radial-gradient(900px 500px at 110% 10%, #7A0F2E 0%, transparent 55%), #0B0B0E !important; }
+      .block-container { padding: 18px 14px 70px !important; max-width: 640px !important; margin: 0 auto; }
+      [data-testid="stVerticalBlock"] { gap: 10px !important; }
+      [data-testid="stHorizontalBlock"] { flex-wrap: nowrap !important; gap: 10px !important; }
+      [data-testid="stHorizontalBlock"] > div { min-width: 0 !important; flex: 1 1 0 !important; }
+      .cc-cab { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 22px;
+        background: linear-gradient(135deg, rgba(247,201,72,.16), rgba(255,255,255,.04));
+        border: 1px solid rgba(247,201,72,.45); box-shadow: 0 10px 30px rgba(0,0,0,.35); }
+      .cc-cab img { width: 92px; border-radius: 12px; box-shadow: 0 0 0 3px #0B0B0E, 0 0 0 5px #D4A62A; }
+      .cc-cab h1 { font-family: Anton, Impact, sans-serif; font-size: 30px; line-height: 1; margin: 0; color: #FFFFFF; letter-spacing: 1px; }
+      .cc-cab p { margin: 4px 0 0; font-family: 'Barlow Condensed', sans-serif; font-size: 18px; color: #F7C948; font-weight: 700; }
+      .cc-resumen { display: flex; gap: 8px; margin: 6px 0 2px; }
+      .cc-pill { flex: 1; text-align: center; font-family: 'Barlow Condensed', sans-serif; font-weight: 800; font-size: 18px;
+        padding: 8px; border-radius: 999px; color: #FFFFFF; }
+      .cc-pill.v { background: rgba(47,180,87,.18); border: 1px solid #2FB457; }
+      .cc-pill.r { background: rgba(255,59,78,.16); border: 1px solid #FF3B4E; }
+      .cc-card { display: flex; align-items: center; gap: 14px; padding: 14px; border-radius: 22px; margin-top: 10px;
+        background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); box-shadow: 0 8px 24px rgba(0,0,0,.35); }
+      .cc-card.agot { background: linear-gradient(135deg, rgba(208,2,27,.28), rgba(255,255,255,.03)); border-color: rgba(255,59,78,.7); }
+      .cc-card img { width: 78px; height: 78px; border-radius: 50%; object-fit: cover; flex: 0 0 auto;
+        border: 4px solid #2FB457; box-shadow: 0 0 18px rgba(47,180,87,.45); }
+      .cc-card.agot img { border-color: #FF3B4E; box-shadow: 0 0 18px rgba(255,59,78,.55); filter: grayscale(.45); }
+      .cc-tag { font-family: 'Barlow Condensed', sans-serif; font-size: 14px; font-weight: 800; letter-spacing: 3px; color: #F7C948; text-transform: uppercase; }
+      .cc-nom { font-family: 'Barlow Condensed', sans-serif; font-size: 22px; font-weight: 800; color: #FFFFFF; line-height: 1.05; margin: 2px 0 6px; }
+      .cc-est { display: inline-flex; align-items: center; gap: 8px; font-family: 'Barlow Condensed', sans-serif; font-weight: 800;
+        font-size: 15px; letter-spacing: 2px; padding: 4px 12px; border-radius: 999px; }
+      .cc-est.v { color: #7CF0A0; background: rgba(47,180,87,.18); }
+      .cc-est.r { color: #FF8A95; background: rgba(255,59,78,.18); }
+      .cc-pto { width: 10px; height: 10px; border-radius: 50%; animation: ccPto 1.2s ease-in-out infinite; }
+      .cc-est.v .cc-pto { background: #2FB457; box-shadow: 0 0 10px #2FB457; }
+      .cc-est.r .cc-pto { background: #FF3B4E; box-shadow: 0 0 10px #FF3B4E; }
+      @keyframes ccPto { 50% { transform: scale(.6); opacity: .5; } }
+      div.stButton > button { width: 100%; min-height: 58px; border-radius: 16px; font-family: 'Barlow Condensed', sans-serif;
+        font-size: 19px; font-weight: 800; letter-spacing: 1px; transition: transform .12s ease, box-shadow .2s ease; }
+      div.stButton > button:active { transform: scale(.97); }
+      .cc-nota { text-align: center; font-family: 'Barlow Condensed', sans-serif; color: rgba(255,255,255,.65); font-size: 15px; margin-top: 14px; }
+      .cc-login { text-align: center; padding: 26px 18px 10px; border-radius: 24px; margin-top: 30px;
+        background: linear-gradient(160deg, rgba(247,201,72,.14), rgba(255,255,255,.03)); border: 1px solid rgba(247,201,72,.45); }
+      .cc-login img { width: 150px; border-radius: 16px; box-shadow: 0 0 0 3px #0B0B0E, 0 0 0 6px #D4A62A, 0 0 30px rgba(247,201,72,.4); }
+      .cc-login h2 { font-family: Anton, Impact, sans-serif; color: #FFFFFF; font-size: 30px; margin: 16px 0 4px; letter-spacing: 1px; }
+      .cc-login p { font-family: 'Barlow Condensed', sans-serif; color: #F7C948; font-size: 18px; font-weight: 700; margin: 0; }
+      [data-testid="stTextInput"] input { min-height: 54px; font-size: 22px; text-align: center; letter-spacing: 6px; border-radius: 14px; }
+      [data-testid="stTextInput"] label p { color: #FFFFFF !important; font-family: 'Barlow Condensed', sans-serif; font-size: 16px; }
+      .st-key-entrar button { background: linear-gradient(135deg, #F7C948, #D4A62A) !important; color: #16110D !important; border: 0 !important;
+        box-shadow: 0 8px 22px rgba(247,201,72,.35); }
     </style>""", unsafe_allow_html=True)
     try:
         clave = str(st.secrets["CLAVE_ADMIN"])
@@ -191,9 +241,10 @@ def pagina_control():
         st.error("Falta configurar la clave: en Streamlit, Settings → Secrets, escriba  CLAVE_ADMIN = \"su clave\"")
         st.stop()
     if not st.session_state.get("admin_ok"):
-        st.markdown("### 🔒 Control de platos – Cafetería CC")
-        intento = st.text_input("Clave", type="password")
-        if st.button("Entrar", width="stretch"):
+        st.markdown(f'<div class="cc-login">{"<img src=" + chr(34) + logo + chr(34) + ">" if logo else ""}'
+                    '<h2>PANEL DE PLATOS</h2><p>Cafetería CC · Solo personal autorizado</p></div>', unsafe_allow_html=True)
+        intento = st.text_input("Clave de acceso", type="password", placeholder="••••")
+        if st.button("ENTRAR", key="entrar", width="stretch"):
             if intento == clave:
                 st.session_state.admin_ok = True
                 st.rerun()
@@ -202,22 +253,40 @@ def pagina_control():
     if carpeta is None:
         st.warning("Todavía no hay ningún menú publicado.")
         st.stop()
-    st.markdown(f"### 🍽️ Control de platos\n**{fecha_larga(fecha)}**")
-    st.caption("Los cambios se ven en todas las TV y celulares en 2–3 segundos.")
     agot = agotados_de(fecha)
-    for (codigo, etiqueta), nombre in zip(PLATOS, nombres_platos(carpeta)):
+    nombres = nombres_platos(carpeta)
+    st.markdown(f'<div class="cc-cab">{"<img src=" + chr(34) + logo + chr(34) + ">" if logo else ""}'
+                f'<div><h1>PANEL DE PLATOS</h1><p>{fecha_larga(fecha)}</p></div></div>'
+                f'<div class="cc-resumen"><div class="cc-pill v">🟢 {4 - len(agot)} disponibles</div>'
+                f'<div class="cc-pill r">🔴 {len(agot)} agotados</div></div>', unsafe_allow_html=True)
+    estilos = []
+    for (codigo, etiqueta), nombre in zip(PLATOS, nombres):
         esta_agotado = codigo in agot
-        clase, texto = ("cc-agot", "🔴 AGOTADO") if esta_agotado else ("cc-disp", "🟢 DISPONIBLE")
-        st.markdown(f'<div class="cc-estado {clase}"><div class="cc-tag">{etiqueta}</div>'
-                    f'<div class="cc-nom">{nombre}</div><div class="cc-est">{texto}</div></div>',
-                    unsafe_allow_html=True)
+        foto = imgs.get(nombre, "")
+        st.markdown(
+            f'<div class="cc-card {"agot" if esta_agotado else ""}">'
+            f'{"<img src=" + chr(34) + foto + chr(34) + ">" if foto else ""}'
+            f'<div><div class="cc-tag">{etiqueta}</div><div class="cc-nom">{nombre}</div>'
+            + ('<span class="cc-est r"><span class="cc-pto"></span>AGOTADO</span>' if esta_agotado
+               else '<span class="cc-est v"><span class="cc-pto"></span>DISPONIBLE</span>')
+            + '</div></div>', unsafe_allow_html=True)
+        activo_v = "background: linear-gradient(135deg,#2FB457,#17803A) !important; color:#FFFFFF !important; border:0 !important; box-shadow: 0 0 0 3px rgba(47,180,87,.35), 0 10px 24px rgba(47,180,87,.45) !important;"
+        activo_r = "background: linear-gradient(135deg,#FF3B4E,#B3001B) !important; color:#FFFFFF !important; border:0 !important; box-shadow: 0 0 0 3px rgba(255,59,78,.35), 0 10px 24px rgba(255,59,78,.45) !important;"
+        apagado = "background: rgba(255,255,255,.06) !important; color: rgba(255,255,255,.75) !important; border: 1px solid rgba(255,255,255,.18) !important;"
+        estilos.append(f".st-key-d_{codigo} button {{ {apagado if esta_agotado else activo_v} }}")
+        estilos.append(f".st-key-a_{codigo} button {{ {activo_r if esta_agotado else apagado} }}")
         c1, c2 = st.columns(2)
-        if c1.button("🟢 Disponible", key=f"d_{codigo}", type="secondary" if esta_agotado else "primary", width="stretch"):
+        if c1.button(("✓ DISPONIBLE" if not esta_agotado else "DISPONIBLE"), key=f"d_{codigo}", width="stretch"):
             marcar_plato(fecha, codigo, False)
+            st.toast(f"🟢 {etiqueta}: disponible")
             st.rerun()
-        if c2.button("🔴 Agotado", key=f"a_{codigo}", type="primary" if esta_agotado else "secondary", width="stretch"):
+        if c2.button(("✓ AGOTADO" if esta_agotado else "AGOTADO"), key=f"a_{codigo}", width="stretch"):
             marcar_plato(fecha, codigo, True)
+            st.toast(f"🔴 {etiqueta}: agotado")
             st.rerun()
+    st.markdown("<style>" + "\n".join(estilos) + "</style>", unsafe_allow_html=True)
+    st.markdown('<div class="cc-nota">Los cambios aparecen en todas las TV y celulares en 2–3 segundos.</div>',
+                unsafe_allow_html=True)
     st.stop()
 
 
@@ -318,6 +387,18 @@ def sonido_siempre_activo(hay_musica):
       if (el && el.tagName === 'AUDIO') siguiente();
       else if (el && el.play) {{ el.currentTime = 0; el.play().catch(function () {{}}); }}
     }}, true);
+  }}
+  /* Mantener la pantalla encendida (TV y celulares) mientras la pagina este abierta. */
+  function pantallaEncendida() {{
+    if ('wakeLock' in navigator && !window.__ccWL) {{
+      navigator.wakeLock.request('screen').then(function (l) {{ window.__ccWL = l; l.addEventListener('release', function () {{ window.__ccWL = null; }}); }}).catch(function () {{}});
+    }}
+  }}
+  pantallaEncendida();
+  if (!window.__ccWLListener) {{
+    window.__ccWLListener = true;
+    document.addEventListener('visibilitychange', function () {{ if (!document.hidden) pantallaEncendida(); }});
+    ['pointerdown', 'keydown'].forEach(function (ev) {{ document.addEventListener(ev, pantallaEncendida, {{ passive: true }}); }});
   }}
   if (window.__ccTimer) clearInterval(window.__ccTimer);
   window.__ccTimer = setInterval(revisar, 1000);
