@@ -6,6 +6,7 @@ Uso:
   Misma dirección para todos: https://menu-cafeteria-cc.streamlit.app/
   La app mira la PANTALLA del equipo: horizontal y grande = TV; vertical = celular.
   Forzar vista:   ?vista=tv   o   ?vista=celular   (recomendado guardar en la TV: ?vista=tv)
+  Control de platos (agotado/disponible): ?admin=1  (clave en Settings → Secrets: CLAVE_ADMIN)
   Probar otro día: ?fecha=2026-10-19   (se puede combinar: ?fecha=2026-10-19&vista=celular)
   TV lenta:       ?calidad=1080
 
@@ -27,6 +28,32 @@ from zoneinfo import ZoneInfo
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
 from streamlit_js_eval import streamlit_js_eval
+import re
+import threading
+
+PLATOS = [("sopa", "Sopa"), ("seco1", "Seco opción 1"), ("seco2", "Seco opción 2"), ("dieta", "Dieta")]
+
+
+@st.cache_resource
+def estado_compartido():
+    """Estado de 'agotado' compartido por TODOS los equipos conectados (memoria del servidor)."""
+    return {"fecha": None, "agotados": set(), "lock": threading.Lock()}
+
+
+def agotados_de(fecha):
+    e = estado_compartido()
+    with e["lock"]:
+        if e["fecha"] != fecha:          # cada día nuevo empieza con todo DISPONIBLE
+            e["fecha"], e["agotados"] = fecha, set()
+        return set(e["agotados"])
+
+
+def marcar_plato(fecha, plato, agotado):
+    e = estado_compartido()
+    with e["lock"]:
+        if e["fecha"] != fecha:
+            e["fecha"], e["agotados"] = fecha, set()
+        (e["agotados"].add if agotado else e["agotados"].discard)(plato)
 
 ZONA = ZoneInfo("America/Guayaquil")
 CARPETA_MENUS = Path(__file__).parent / "menus"
@@ -60,9 +87,6 @@ st.markdown(f"""
   .botones a {{ text-decoration: none; font-family: sans-serif; font-weight: 800; font-size: 18px;
                padding: 14px 22px; border-radius: 14px; border: 3px solid #fff; color: #fff; }}
   .wa {{ background: #1E9E4A; }}  .pl {{ background: #C8102E; }}
-  div.stButton {{ position: fixed !important; top: 12px; right: 12px; z-index: 9999; width: auto !important; }}
-  div.stButton > button {{ width: auto !important; opacity: 0.35; background: #222; color: #fff; border: 1px solid #555; }}
-  div.stButton > button:hover, div.stButton > button:focus {{ opacity: 1; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -72,7 +96,9 @@ st.markdown(f"""
 # de alto = TV o computadora; vertical o pequeña = celular.
 params = st.query_params
 vista = params.get("vista", "").lower()
-if vista not in ("tv", "celular"):
+if "admin" in params:
+    vista = "admin"
+elif vista not in ("tv", "celular"):
     if "vista_detectada" not in st.session_state:
         pantalla = streamlit_js_eval(js_expressions="[screen.width, screen.height]", key="pantalla")
         if not pantalla:
@@ -133,6 +159,78 @@ def buscar_menu():
 
 
 carpeta, fecha, es_hoy = buscar_menu()
+
+
+def nombres_platos(carpeta):
+    """Nombres de los 4 platos tomados del menú del día (para la página de control)."""
+    for nombre in ("tv.html", "celular.html"):
+        archivo = carpeta / nombre
+        if archivo.exists():
+            encontrados = re.findall(r'color: #16110D; text-transform: uppercase">([^<]+)</div>', archivo.read_text(encoding="utf-8"))
+            if len(encontrados) >= 4:
+                return encontrados[:4]
+    return [etiqueta for _, etiqueta in PLATOS]
+
+
+def pagina_control():
+    st.markdown("""<style>
+      .block-container { padding: 24px 16px 60px !important; max-width: 720px !important; margin: 0 auto; }
+      [data-testid="stVerticalBlock"] { gap: 12px !important; }
+      h1, h2, h3, p, label, .stMarkdown { color: #FFFFFF !important; font-family: sans-serif; }
+      div.stButton > button { width: 100%; min-height: 64px; font-size: 20px; font-weight: 800; border-radius: 14px; }
+      .cc-estado { border-radius: 16px; padding: 14px 16px; margin-top: 8px; font-family: sans-serif; }
+      .cc-disp { background: #0F3D22; border: 2px solid #2FB457; }
+      .cc-agot { background: #4A0A12; border: 2px solid #FF3B4E; }
+      .cc-tag { font-size: 14px; font-weight: 800; letter-spacing: 2px; color: #F7C948; text-transform: uppercase; }
+      .cc-nom { font-size: 20px; font-weight: 800; color: #FFFFFF; margin: 4px 0; }
+      .cc-est { font-size: 16px; font-weight: 800; }
+    </style>""", unsafe_allow_html=True)
+    try:
+        clave = str(st.secrets["CLAVE_ADMIN"])
+    except Exception:
+        st.error("Falta configurar la clave: en Streamlit, Settings → Secrets, escriba  CLAVE_ADMIN = \"su clave\"")
+        st.stop()
+    if not st.session_state.get("admin_ok"):
+        st.markdown("### 🔒 Control de platos – Cafetería CC")
+        intento = st.text_input("Clave", type="password")
+        if st.button("Entrar", width="stretch"):
+            if intento == clave:
+                st.session_state.admin_ok = True
+                st.rerun()
+            st.error("Clave incorrecta")
+        st.stop()
+    if carpeta is None:
+        st.warning("Todavía no hay ningún menú publicado.")
+        st.stop()
+    st.markdown(f"### 🍽️ Control de platos\n**{fecha_larga(fecha)}**")
+    st.caption("Los cambios se ven en todas las TV y celulares en 2–3 segundos.")
+    agot = agotados_de(fecha)
+    for (codigo, etiqueta), nombre in zip(PLATOS, nombres_platos(carpeta)):
+        esta_agotado = codigo in agot
+        clase, texto = ("cc-agot", "🔴 AGOTADO") if esta_agotado else ("cc-disp", "🟢 DISPONIBLE")
+        st.markdown(f'<div class="cc-estado {clase}"><div class="cc-tag">{etiqueta}</div>'
+                    f'<div class="cc-nom">{nombre}</div><div class="cc-est">{texto}</div></div>',
+                    unsafe_allow_html=True)
+        c1, c2 = st.columns(2)
+        if c1.button("🟢 Disponible", key=f"d_{codigo}", type="secondary" if esta_agotado else "primary", width="stretch"):
+            marcar_plato(fecha, codigo, False)
+            st.rerun()
+        if c2.button("🔴 Agotado", key=f"a_{codigo}", type="primary" if esta_agotado else "secondary", width="stretch"):
+            marcar_plato(fecha, codigo, True)
+            st.rerun()
+    st.stop()
+
+
+if vista == "admin":
+    pagina_control()
+
+
+@st.fragment(run_every=2)
+def sellos_en_vivo(fecha):
+    """Cada 2 segundos aplica el estado de 'agotado' sin recargar el menú ni cortar la música."""
+    agot = agotados_de(fecha)
+    reglas = "".join(f".cc-agotado-{p}{{display:flex !important}}" for p in sorted(agot))
+    st.markdown(f"<style>{reglas}</style>", unsafe_allow_html=True)
 if carpeta is None:
     st.markdown('<div class="aviso">☕ Cafetería CC<br>El menú del día se publicará pronto.</div>',
                 unsafe_allow_html=True)
@@ -256,6 +354,7 @@ if vista == "celular":
         st.image(str(carpeta / "celular.png"), width="stretch")
     poner_musica()
     sonido_siempre_activo(bool(canciones))
+    sellos_en_vivo(fecha)
     st.markdown(f"""<div class="botones">
         <a class="wa" href="{WHATSAPP}" target="_blank">📲 Pedir por WhatsApp</a>
         <a class="pl" href="{PLATAFORMA}" target="_blank">🛒 Pedir en la plataforma</a></div>""",
@@ -280,3 +379,4 @@ else:
                         unsafe_allow_html=True)
     poner_musica()
     sonido_siempre_activo(bool(canciones))
+    sellos_en_vivo(fecha)
